@@ -64,6 +64,46 @@ nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev
 > [!TIP]
 > Remove versions older than 0.1.x before installing.
 
+#### Termux (Android)
+
+On Android with [Termux](https://termux.dev), pre-built binaries won't run because they are linked against glibc while Android uses Bionic libc. The install script detects Termux automatically and builds from source using Bun instead.
+
+**Prerequisites:**
+
+```bash
+pkg update && pkg install bun git
+```
+
+**Install:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Nanana291/opencode/main/install | bash
+```
+
+This clones the source to `~/.opencode/src`, installs dependencies with `bun install`, and creates a wrapper script at `~/.opencode/bin/opencode` that runs opencode directly via Bun.
+
+**Add to PATH** (if not done automatically):
+
+```bash
+echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Update:**
+
+```bash
+git -C ~/.opencode/src pull
+```
+
+**Optional — clipboard support** (requires [Termux:API](https://wiki.termux.com/wiki/Termux:API)):
+
+```bash
+pkg install termux-api
+```
+
+> [!NOTE]
+> OpenCode runs in dev/source mode on Termux. The version will report as `local`. All features work the same as the release binary.
+
 ### Desktop App (BETA)
 
 OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).

@@ -68,6 +68,12 @@ done
 INSTALL_DIR=$HOME/.opencode/bin
 mkdir -p "$INSTALL_DIR"
 
+# Detect Termux (Android)
+is_termux=false
+if [[ -n "${TERMUX_VERSION:-}" ]] || [[ "${PREFIX:-}" == *"com.termux"* ]]; then
+    is_termux=true
+fi
+
 # If --binary is provided, skip all download/detection logic
 if [ -n "$binary_path" ]; then
     if [ ! -f "$binary_path" ]; then
@@ -75,6 +81,8 @@ if [ -n "$binary_path" ]; then
         exit 1
     fi
     specific_version="local"
+elif [ "$is_termux" = "true" ]; then
+    : # Termux: skip binary download — install_for_termux handles everything
 else
     raw_os=$(uname -s)
     os=$(echo "$raw_os" | tr '[:upper:]' '[:lower:]')
@@ -351,8 +359,50 @@ install_from_binary() {
     chmod 755 "${INSTALL_DIR}/opencode"
 }
 
+install_for_termux() {
+    print_message info "\n${MUTED}Termux/Android detected — installing from source${NC}"
+
+    if ! command -v bun >/dev/null 2>&1; then
+        echo -e "${RED}Error: Bun is required but not installed.${NC}"
+        echo -e "${MUTED}Install it with: ${NC}pkg install bun"
+        exit 1
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        echo -e "${RED}Error: Git is required but not installed.${NC}"
+        echo -e "${MUTED}Install it with: ${NC}pkg install git"
+        exit 1
+    fi
+
+    local src_dir="$HOME/.opencode/src"
+
+    if [[ -d "$src_dir/.git" ]]; then
+        print_message info "${MUTED}Updating existing source at ${NC}$src_dir"
+        git -C "$src_dir" pull --ff-only
+    else
+        print_message info "${MUTED}Cloning opencode to ${NC}$src_dir"
+        git clone --depth=1 https://github.com/Nanana291/opencode.git "$src_dir"
+    fi
+
+    print_message info "${MUTED}Installing dependencies (this may take a minute)...${NC}"
+    (cd "$src_dir" && bun install)
+
+    # Write a wrapper script that runs opencode via bun directly from source
+    local wrapper="$INSTALL_DIR/opencode"
+    cat > "$wrapper" <<WRAPPER
+#!/usr/bin/env bash
+exec bun run --cwd "\${HOME}/.opencode/src/packages/opencode" --conditions=browser src/index.ts "\$@"
+WRAPPER
+    chmod 755 "$wrapper"
+
+    print_message info "${MUTED}Installed opencode to ${NC}$wrapper"
+    print_message info "${MUTED}Source kept at ${NC}$src_dir ${MUTED}(run ${NC}git -C $src_dir pull${MUTED} to update)${NC}"
+}
+
 if [ -n "$binary_path" ]; then
     install_from_binary
+elif [ "$is_termux" = "true" ]; then
+    install_for_termux
 else
     check_version
     download_and_install

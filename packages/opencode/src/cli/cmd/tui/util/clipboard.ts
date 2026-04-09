@@ -83,16 +83,26 @@ export namespace Clipboard {
     }
 
     if (os === "linux") {
-      const wayland = await Process.run(["wl-paste", "-t", "image/png"], { nothrow: true })
-      if (wayland.stdout.byteLength > 0) {
-        return { data: Buffer.from(wayland.stdout).toString("base64"), mime: "image/png" }
+      // Termux (Android): no image clipboard support, fall through to text
+      if (!process.env["TERMUX_VERSION"] && !process.env["PREFIX"]?.includes("com.termux")) {
+        const wayland = await Process.run(["wl-paste", "-t", "image/png"], { nothrow: true })
+        if (wayland.stdout.byteLength > 0) {
+          return { data: Buffer.from(wayland.stdout).toString("base64"), mime: "image/png" }
+        }
+        const x11 = await Process.run(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], {
+          nothrow: true,
+        })
+        if (x11.stdout.byteLength > 0) {
+          return { data: Buffer.from(x11.stdout).toString("base64"), mime: "image/png" }
+        }
       }
-      const x11 = await Process.run(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], {
-        nothrow: true,
-      })
-      if (x11.stdout.byteLength > 0) {
-        return { data: Buffer.from(x11.stdout).toString("base64"), mime: "image/png" }
-      }
+    }
+
+    // Termux (Android): use termux-clipboard-get for text
+    if (os === "linux" && (process.env["TERMUX_VERSION"] || process.env["PREFIX"]?.includes("com.termux"))) {
+      const result = await Process.run(["termux-clipboard-get"], { nothrow: true })
+      const text = Buffer.from(result.stdout).toString("utf8").trim()
+      if (text) return { data: text, mime: "text/plain" }
     }
 
     const text = await clipboardy.read().catch(() => {})
@@ -113,6 +123,19 @@ export namespace Clipboard {
     }
 
     if (os === "linux") {
+      // Termux (Android): use termux-clipboard-set if available
+      const isTermux = !!(process.env["TERMUX_VERSION"] || process.env["PREFIX"]?.includes("com.termux"))
+      if (isTermux && which("termux-clipboard-set")) {
+        console.log("clipboard: using termux-clipboard-set")
+        return async (text: string) => {
+          const proc = Process.spawn(["termux-clipboard-set"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+          if (!proc.stdin) return
+          proc.stdin.write(text)
+          proc.stdin.end()
+          await proc.exited.catch(() => {})
+        }
+      }
+
       if (process.env["WAYLAND_DISPLAY"] && which("wl-copy")) {
         console.log("clipboard: using wl-copy")
         return async (text: string) => {
