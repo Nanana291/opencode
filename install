@@ -360,43 +360,57 @@ install_from_binary() {
 }
 
 install_for_termux() {
-    print_message info "\n${MUTED}Termux/Android detected — installing from source${NC}"
+    print_message info "\n${MUTED}Termux/Android detected — using proot-distro (Ubuntu) for glibc compatibility${NC}"
 
-    if ! command -v bun >/dev/null 2>&1; then
-        echo -e "${RED}Error: Bun is required but not installed.${NC}"
-        echo -e "${MUTED}Install it with: ${NC}pkg install bun"
+    # proot-distro provides a real glibc Linux environment where the
+    # pre-built opencode-linux-arm64 binary runs without modification.
+    if ! command -v proot-distro >/dev/null 2>&1; then
+        echo -e "${RED}Error: proot-distro is required but not installed.${NC}"
+        echo -e "${MUTED}Install it with: ${NC}pkg install proot-distro"
+        echo -e "${MUTED}Then re-run this installer.${NC}"
         exit 1
     fi
 
-    if ! command -v git >/dev/null 2>&1; then
-        echo -e "${RED}Error: Git is required but not installed.${NC}"
-        echo -e "${MUTED}Install it with: ${NC}pkg install git"
-        exit 1
-    fi
-
-    local src_dir="$HOME/.opencode/src"
-
-    if [[ -d "$src_dir/.git" ]]; then
-        print_message info "${MUTED}Updating existing source at ${NC}$src_dir"
-        git -C "$src_dir" pull --ff-only
+    # Install Ubuntu rootfs if not present
+    local ubuntu_rootfs="${PREFIX}/var/lib/proot-distro/installed-rootfs/ubuntu"
+    if [[ ! -d "$ubuntu_rootfs" ]]; then
+        print_message info "${MUTED}Setting up Ubuntu via proot-distro (~300 MB, one-time)...${NC}"
+        proot-distro install ubuntu
     else
-        print_message info "${MUTED}Cloning opencode to ${NC}$src_dir"
-        git clone --depth=1 https://github.com/Nanana291/opencode.git "$src_dir"
+        print_message info "${MUTED}Ubuntu rootfs found at ${NC}$ubuntu_rootfs"
     fi
 
-    print_message info "${MUTED}Installing dependencies (this may take a minute)...${NC}"
-    (cd "$src_dir" && bun install)
+    # Install opencode binary inside Ubuntu using the upstream release
+    print_message info "${MUTED}Installing opencode inside Ubuntu...${NC}"
+    proot-distro login ubuntu -- bash -lc "
+        set -e
+        mkdir -p /root/.opencode/bin
+        if ! command -v curl >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
+            apt-get update -qq
+            apt-get install -y curl tar
+        fi
+        LATEST=\$(curl -s https://api.github.com/repos/anomalyco/opencode/releases/latest \
+            | grep '\"tag_name\"' | sed 's/.*\"v\([^\"]*\)\".*/\1/')
+        if [[ -z \"\$LATEST\" ]]; then
+            echo 'Failed to fetch latest version' >&2
+            exit 1
+        fi
+        curl -fsSL \"https://github.com/anomalyco/opencode/releases/download/v\${LATEST}/opencode-linux-arm64.tar.gz\" \
+            | tar -xz -C /root/.opencode/bin
+        chmod 755 /root/.opencode/bin/opencode
+        echo \"opencode \$LATEST installed\"
+    "
 
-    # Write a wrapper script that runs opencode via bun directly from source
+    # Create a Termux wrapper that proxies into the Ubuntu proot
     local wrapper="$INSTALL_DIR/opencode"
-    cat > "$wrapper" <<WRAPPER
-#!/usr/bin/env bash
-exec bun run --cwd "\${HOME}/.opencode/src/packages/opencode" --conditions=browser src/index.ts "\$@"
+    cat > "$wrapper" <<'WRAPPER'
+#!/data/data/com.termux/files/usr/bin/bash
+exec proot-distro login ubuntu --work-dir "$(pwd)" -- /root/.opencode/bin/opencode "$@"
 WRAPPER
     chmod 755 "$wrapper"
 
-    print_message info "${MUTED}Installed opencode to ${NC}$wrapper"
-    print_message info "${MUTED}Source kept at ${NC}$src_dir ${MUTED}(run ${NC}git -C $src_dir pull${MUTED} to update)${NC}"
+    print_message info "${MUTED}Installed ${NC}opencode ${MUTED}wrapper to ${NC}$wrapper"
+    print_message info "${MUTED}To update: ${NC}proot-distro login ubuntu -- curl -fsSL https://opencode.ai/install | bash"
 }
 
 if [ -n "$binary_path" ]; then

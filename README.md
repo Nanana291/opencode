@@ -66,21 +66,25 @@ nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev
 
 #### Termux (Android)
 
-On Android with [Termux](https://termux.dev), pre-built binaries won't run because they are linked against glibc while Android uses Bionic libc. The install script detects Termux automatically and builds from source using Bun instead.
+Pre-built opencode binaries are linked against glibc, but Android uses Bionic libc — they are incompatible. The solution is [proot-distro](https://github.com/termux/proot-distro), which runs a real Ubuntu environment inside Termux where the standard `linux-arm64` binary works without any changes. The install script handles this automatically.
 
 **Prerequisites:**
 
 ```bash
-pkg update && pkg install bun git
+pkg update && pkg install proot-distro curl
 ```
 
 **Install:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Nanana291/opencode/main/install | bash
+curl -fsSL https://raw.githubusercontent.com/Nanana291/opencode/dev/install | bash
 ```
 
-This clones the source to `~/.opencode/src`, installs dependencies with `bun install`, and creates a wrapper script at `~/.opencode/bin/opencode` that runs opencode directly via Bun.
+What this does:
+1. Detects Termux automatically
+2. Installs an Ubuntu rootfs via `proot-distro` (one-time ~300 MB download)
+3. Downloads the `opencode-linux-arm64` release binary inside Ubuntu
+4. Creates a wrapper at `~/.opencode/bin/opencode` that calls through to Ubuntu
 
 **Add to PATH** (if not done automatically):
 
@@ -89,10 +93,19 @@ echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
+**Usage:**
+
+```bash
+opencode          # runs in current directory
+opencode --help
+```
+
+Your Termux working directory is visible inside the proot environment, so opencode can read and edit your files normally.
+
 **Update:**
 
 ```bash
-git -C ~/.opencode/src pull
+proot-distro login ubuntu -- curl -fsSL https://opencode.ai/install | bash
 ```
 
 **Optional — clipboard support** (requires [Termux:API](https://wiki.termux.com/wiki/Termux:API)):
@@ -102,7 +115,7 @@ pkg install termux-api
 ```
 
 > [!NOTE]
-> OpenCode runs in dev/source mode on Termux. The version will report as `local`. All features work the same as the release binary.
+> Bun is not available on Android ARM64. proot-distro is the only approach that provides the glibc environment the opencode binary requires.
 
 ### Desktop App (BETA)
 
