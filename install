@@ -389,13 +389,21 @@ install_for_termux() {
             apt-get update -qq
             apt-get install -y curl tar
         fi
-        LATEST=\$(curl -s https://api.github.com/repos/anomalyco/opencode/releases/latest \
+        # Try the fork's own releases first; fall back to upstream if none exist.
+        RELEASE_REPO=\"Nanana291/opencode\"
+        LATEST=\$(curl -s \"https://api.github.com/repos/\${RELEASE_REPO}/releases/latest\" \
             | grep '\"tag_name\"' | sed 's/.*\"v\([^\"]*\)\".*/\1/')
+        if [[ -z \"\$LATEST\" ]]; then
+            RELEASE_REPO=\"anomalyco/opencode\"
+            LATEST=\$(curl -s \"https://api.github.com/repos/\${RELEASE_REPO}/releases/latest\" \
+                | grep '\"tag_name\"' | sed 's/.*\"v\([^\"]*\)\".*/\1/')
+        fi
         if [[ -z \"\$LATEST\" ]]; then
             echo 'Failed to fetch latest version' >&2
             exit 1
         fi
-        curl -fsSL \"https://github.com/anomalyco/opencode/releases/download/v\${LATEST}/opencode-linux-arm64.tar.gz\" \
+        echo \"Downloading opencode v\${LATEST} from \${RELEASE_REPO}\"
+        curl -fsSL \"https://github.com/\${RELEASE_REPO}/releases/download/v\${LATEST}/opencode-linux-arm64.tar.gz\" \
             | tar -xz -C /root/.opencode/bin
         chmod 755 /root/.opencode/bin/opencode
         echo \"opencode \$LATEST installed\"
