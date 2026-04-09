@@ -124,15 +124,36 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
 import type { EventSource } from "./context/sdk"
 import { DialogVariant } from "./component/dialog-variant"
 
+/**
+ * Returns true only for terminals that implement the Kitty keyboard protocol.
+ * Most standard Linux terminals (xterm, VTE-based, etc.) do not support it —
+ * enabling it there breaks input handling. Override with
+ * OPENCODE_DISABLE_KITTY_KEYBOARD=1 to force-disable.
+ */
+function supportsKittyKeyboard(): boolean {
+  if (Flag.OPENCODE_DISABLE_KITTY_KEYBOARD) return false
+  const term = process.env["TERM"] ?? ""
+  const termProgram = process.env["TERM_PROGRAM"] ?? ""
+  return (
+    term === "xterm-kitty" ||
+    termProgram === "WezTerm" ||
+    termProgram === "ghostty" ||
+    process.env["KITTY_WINDOW_ID"] !== undefined
+  )
+}
+
 function rendererConfig(_config: TuiConfig.Info): CliRendererConfig {
   const mouseEnabled = !Flag.OPENCODE_DISABLE_MOUSE && (_config.mouse ?? true)
+  // Default to 30 fps inside proot/container environments for lower overhead;
+  // users can raise it with OPENCODE_TARGET_FPS=60.
+  const fps = Flag.OPENCODE_TARGET_FPS ?? (process.env["container"] ? 30 : 60)
 
   return {
     externalOutputMode: "passthrough",
-    targetFps: 60,
+    targetFps: fps,
     gatherStats: false,
     exitOnCtrlC: false,
-    useKittyKeyboard: {},
+    useKittyKeyboard: supportsKittyKeyboard() ? {} : false,
     autoFocus: false,
     openConsoleOnError: false,
     useMouse: mouseEnabled,

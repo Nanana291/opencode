@@ -401,11 +401,23 @@ install_for_termux() {
         echo \"opencode \$LATEST installed\"
     "
 
-    # Create a Termux wrapper that proxies into the Ubuntu proot
+    # Create a Termux wrapper that proxies into the Ubuntu proot.
+    # Forward key terminal env vars so the TUI renders correctly:
+    #   TERM / COLORTERM  — color and capability detection
+    #   KITTY_WINDOW_ID   — Kitty keyboard protocol detection
+    #   TERM_PROGRAM      — WezTerm / Ghostty detection
     local wrapper="$INSTALL_DIR/opencode"
     cat > "$wrapper" <<'WRAPPER'
 #!/data/data/com.termux/files/usr/bin/bash
-exec proot-distro login ubuntu --work-dir "$(pwd)" -- /root/.opencode/bin/opencode "$@"
+exec proot-distro login ubuntu --work-dir "$(pwd)" -- \
+    env \
+        TERM="${TERM:-xterm-256color}" \
+        COLORTERM="${COLORTERM:-}" \
+        TERM_PROGRAM="${TERM_PROGRAM:-}" \
+        KITTY_WINDOW_ID="${KITTY_WINDOW_ID:-}" \
+        LANG="${LANG:-en_US.UTF-8}" \
+        LC_ALL="${LC_ALL:-en_US.UTF-8}" \
+    /root/.opencode/bin/opencode "$@"
 WRAPPER
     chmod 755 "$wrapper"
 

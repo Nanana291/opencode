@@ -194,6 +194,14 @@ export namespace Pty {
           env.LC_ALL = "C.UTF-8"
           env.LC_CTYPE = "C.UTF-8"
           env.LANG = "C.UTF-8"
+        } else if (process.platform === "linux") {
+          // Ensure UTF-8 locale so Unicode characters render correctly.
+          // proot/container environments often start without LANG set.
+          const lang = env.LANG ?? env.LC_ALL ?? ""
+          if (!lang.includes("UTF")) {
+            env.LANG = "en_US.UTF-8"
+            env.LC_ALL = "en_US.UTF-8"
+          }
         }
         log.info("creating session", { id, cmd: command, args, cwd })
 

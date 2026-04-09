@@ -1,5 +1,12 @@
 import { Config } from "effect"
 
+function number(key: string): number | undefined {
+  const value = process.env[key]
+  if (!value) return undefined
+  const n = parseInt(value, 10)
+  return isNaN(n) ? undefined : n
+}
+
 function truthy(key: string) {
   const value = process.env[key]?.toLowerCase()
   return value === "true" || value === "1"
@@ -35,6 +42,8 @@ export namespace Flag {
   export const OPENCODE_DISABLE_AUTOCOMPACT = truthy("OPENCODE_DISABLE_AUTOCOMPACT")
   export const OPENCODE_DISABLE_MODELS_FETCH = truthy("OPENCODE_DISABLE_MODELS_FETCH")
   export const OPENCODE_DISABLE_MOUSE = truthy("OPENCODE_DISABLE_MOUSE")
+  export const OPENCODE_DISABLE_KITTY_KEYBOARD = truthy("OPENCODE_DISABLE_KITTY_KEYBOARD")
+  export const OPENCODE_TARGET_FPS = number("OPENCODE_TARGET_FPS")
   export const OPENCODE_DISABLE_CLAUDE_CODE = truthy("OPENCODE_DISABLE_CLAUDE_CODE")
   export const OPENCODE_DISABLE_CLAUDE_CODE_PROMPT =
     OPENCODE_DISABLE_CLAUDE_CODE || truthy("OPENCODE_DISABLE_CLAUDE_CODE_PROMPT")
